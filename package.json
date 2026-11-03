@@ -1,0 +1,26 @@
+{
+  "name": "banana-game",
+  "version": "1.0.0",
+  "description": "Banana Game — CIS046-3 Software For Enterprise puzzle assignment",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "banana",
+    "puzzle",
+    "express",
+    "cis046-3"
+  ],
+  "author": "CIS046-3 student (code generated with AI assistance)",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1"
+  }
+}

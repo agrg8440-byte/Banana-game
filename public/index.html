@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<!--
+  Generated with AI assistance for CIS046-3 Software For Enterprise - Banana Game.
+
+  [THEME: EVENT-DRIVEN PROGRAMMING]
+  - UI relies on native DOM events (click, submit, keydown, hashchange)
+  - Custom EventTarget bus dispatches domain events (puzzle:loaded, answer:result, game:over, etc.)
+
+  [THEME: VIRTUAL IDENTITY]
+  - Player state reflects session cookie; navbar reacts to authenticated vs guest state
+  - No secret keys or solution values are ever placed in client DOM or script tags
+
+  [THEME: INTEROPERABILITY]
+  - Consumes server REST API endpoints (/api/game/puzzle, /api/game/answer)
+  - Solution never transmitted to browser; only the public puzzle image URL
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Banana Game — CIS046-3 Software For Enterprise</title>
+    <meta
+      name="description"
+      content="Solve banana math puzzles. Classic, Timed, and Survival modes for CIS046-3 Software For Enterprise."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Outfit:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+
+    <div class="bg-glow" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <a class="brand" href="#/" data-nav aria-label="Banana Game Home">
+        <span class="brand-mark" aria-hidden="true">🍌</span>
+        <span class="brand-text">
+          <strong>Banana Game</strong>
+          <small>CIS046-3 Enterprise</small>
+        </span>
+      </a>
+
+      <nav class="site-nav" aria-label="Main Navigation">
+        <span class="nav-user-badge" id="nav-user-badge" data-auth-link hidden>
+          <span class="user-avatar-badge" aria-hidden="true">👤</span>
+          <strong id="nav-username">Player</strong>
+        </span>
+        <a href="#/" data-nav class="nav-link">Home</a>
+        <a href="#/play" data-nav class="nav-link" data-auth-link hidden>Play</a>
+        <a href="#/profile" data-nav class="nav-link" data-auth-link hidden>Profile</a>
+        <a href="#/board" data-nav class="nav-link">Leaderboard</a>
+        <a href="#/login" data-nav class="nav-link" data-guest-link>Log In</a>
+        <button type="button" class="text-btn" id="logout-btn" data-auth-link hidden>
+          Log Out
+        </button>
+        <button
+          type="button"
+          class="icon-btn sound-toggle"
+          id="mute-btn"
+          aria-pressed="false"
+          aria-label="Mute game sounds"
+          title="Toggle game sound"
+        >
+          <span id="mute-icon" aria-hidden="true">🔊</span>
+          <span id="mute-label">Sound on</span>
+        </button>
+      </nav>
+    </header>
+
+    <main id="main">
+      <!-- HOME VIEW -->
+      <section class="view" id="view-home" data-view="home">
+        <div class="hero">
+          <p class="eyebrow">Enterprise Puzzle Application</p>
+          <h1>Count the bananas. Beat the clock. Keep your streak.</h1>
+          <p class="lede">
+            Puzzles are fetched live from the Banana API over HTTPS. To protect game integrity,
+            the solution is stored strictly within your encrypted server session—the client
+            never sees the answer until an attempt is verified!
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#/register" data-nav data-guest-link>Create Free Account</a>
+            <a class="btn btn-primary" href="#/play" data-nav data-auth-link hidden>Play Now</a>
+            <a class="btn btn-ghost" href="#/login" data-nav data-guest-link>Sign In</a>
+            <a class="btn btn-ghost" href="#/board" data-nav>View Leaderboard</a>
+          </div>
+        </div>
+
+        <ul class="mode-cards" aria-label="Game Modes">
+          <li>
+            <div class="mode-card-header">
+              <span class="mode-emoji" aria-hidden="true">🍌</span>
+              <h2>Classic</h2>
+            </div>
+            <p>Unlimited puzzles at your own pace. 10 points per correct answer. Perfect for building a legendary streak.</p>
+            <div class="mode-badge">Relaxed Pace</div>
+          </li>
+          <li>
+            <div class="mode-card-header">
+              <span class="mode-emoji" aria-hidden="true">⏱️</span>
+              <h2>Timed</h2>
+            </div>
+            <p>60-second speed run! Consecutive correct answers build a combo multiplier up to 8× points.</p>
+            <div class="mode-badge">Combo Multiplier</div>
+          </li>
+          <li>
+            <div class="mode-card-header">
+              <span class="mode-emoji" aria-hidden="true">🛡️</span>
+              <h2>Survival</h2>
+            </div>
+            <p>3 lives. The time limit per puzzle shrinks as your score climbs (from 18s down to 5s!). One mistake costs a life.</p>
+            <div class="mode-badge">Shrinking Clock</div>
+          </li>
+        </ul>
+
+        <div class="security-banner">
+          <div class="security-icon" aria-hidden="true">🔒</div>
+          <div class="security-content">
+            <h3>Enterprise Security &amp; Virtual Identity</h3>
+            <p>
+              Built to demonstrate industry enterprise practices: pass-the-hash protection with <strong>bcrypt</strong>,
+              session fixation defense via <code>req.session.regenerate()</code>, tamper-proof <code>httpOnly</code> &amp;
+              <code>sameSite</code> cookies, and zero solution leakage.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- LOGIN VIEW -->
+      <section class="view" id="view-login" data-view="login" hidden>
+        <div class="auth-card">
+          <h1>Welcome Back</h1>
+          <p class="muted">Enter your player credentials to resume your session.</p>
+          <form id="login-form" novalidate>
+            <label>
+              Username
+              <input
+                name="username"
+                id="login-username"
+                autocomplete="username"
+                required
+                maxlength="20"
+                placeholder="e.g. banana_champ"
+              />
+            </label>
+            <label>
+              Password
+              <input
+                name="password"
+                id="login-password"
+                type="password"
+                autocomplete="current-password"
+                required
+                placeholder="••••••••"
+              />
+            </label>
+            <p class="form-error" id="login-error" role="alert" hidden></p>
+            <button class="btn btn-primary" type="submit" id="login-submit-btn">Log In</button>
+          </form>
+          <p class="muted auth-footer">
+            New player? <a href="#/register" data-nav>Create an account</a>
+          </p>
+        </div>
+      </section>
+
+      <!-- REGISTER VIEW -->
+      <section class="view" id="view-register" data-view="register" hidden>
+        <div class="auth-card">
+          <h1>Create Player Identity</h1>
+          <p class="muted">
+            Choose a unique username (3–20 alphanumeric chars) and a secure password (8+ chars).
+          </p>
+          <form id="register-form" novalidate>
+            <label>
+              Username
+              <input
+                name="username"
+                id="register-username"
+                autocomplete="username"
+                required
+                maxlength="20"
+                placeholder="3–20 letters, numbers, or _"
+              />
+            </label>
+            <label>
+              Password
+              <input
+                name="password"
+                id="register-password"
+                type="password"
+                autocomplete="new-password"
+                required
+                minlength="8"
+                placeholder="At least 8 characters"
+              />
+            </label>
+            <p class="form-error" id="register-error" role="alert" hidden></p>
+            <button class="btn btn-primary" type="submit" id="register-submit-btn">Register</button>
+          </form>
+          <p class="muted auth-footer">
+            Already registered? <a href="#/login" data-nav>Log in</a>
+          </p>
+        </div>
+      </section>
+
+      <!-- PLAY VIEW -->
+      <section class="view" id="view-play" data-view="play" hidden>
+        <!-- MODE PICKER SCREEN -->
+        <div id="mode-picker" class="mode-picker">
+          <div class="mode-picker-intro">
+            <h1>Select Game Mode</h1>
+            <p class="muted">Choose your challenge to start solving puzzles from the banana grove.</p>
+          </div>
+          <div class="mode-grid">
+            <button type="button" class="mode-btn" data-start="classic">
+              <span class="mode-btn-icon" aria-hidden="true">🍌</span>
+              <span class="mode-btn-title">Classic</span>
+              <small>Unlimited puzzles · 10 pts</small>
+            </button>
+            <button type="button" class="mode-btn" data-start="timed">
+              <span class="mode-btn-icon" aria-hidden="true">⏱️</span>
+              <span class="mode-btn-title">Timed</span>
+              <small>60s countdown · combo up to 8×</small>
+            </button>
+            <button type="button" class="mode-btn" data-start="survival">
+              <span class="mode-btn-icon" aria-hidden="true">🛡️</span>
+              <span class="mode-btn-title">Survival</span>
+              <small>3 lives · shrinking timer per puzzle</small>
+            </button>
+          </div>
+        </div>
+
+        <!-- ACTIVE PLAY TABLE -->
+        <div id="play-table" class="play-table" hidden>
+          <!-- HUD -->
+          <div class="hud" role="region" aria-label="Game Status Bar">
+            <div class="hud-card">
+              <span class="hud-label">Mode</span>
+              <strong id="hud-mode" class="hud-value">—</strong>
+            </div>
+            <div class="hud-card">
+              <span class="hud-label">Score</span>
+              <strong id="hud-score" class="hud-value highlight-score">0</strong>
+            </div>
+            <div class="hud-card">
+              <span class="hud-label">Streak</span>
+              <strong id="hud-streak" class="hud-value">0</strong>
+            </div>
+            <div class="hud-card" id="hud-combo-wrap">
+              <span class="hud-label">Combo</span>
+              <strong id="hud-combo" class="hud-value combo-badge">×1</strong>
+            </div>
+            <div class="hud-card" id="hud-lives-wrap" hidden>
+              <span class="hud-label">Lives</span>
+              <strong id="hud-lives" class="hud-value lives-display" aria-live="polite">♥♥♥</strong>
+            </div>
+          </div>
+
+          <!-- ANIMATED TIMER PROGRESS -->
+          <div id="timer-container" class="timer-container" hidden>
+            <div class="timer-meta">
+              <span class="timer-label" id="timer-label">Time Remaining</span>
+              <span class="timer-digits" id="timer-digits">--</span>
+            </div>
+            <div
+              class="timer-track"
+              id="timer-track"
+              role="progressbar"
+              aria-label="Time remaining"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="100"
+            >
+              <div class="timer-bar" id="timer-bar"></div>
+            </div>
+          </div>
+
+          <!-- PUZZLE & CONTROLS STAGE -->
+          <div class="stage" id="stage">
+            <!-- PUZZLE IMAGE DISPLAY -->
+            <div class="puzzle-frame" id="puzzle-frame">
+              <img
+                id="puzzle-image"
+                alt="Banana puzzle equation. Count the bananas and determine the missing one-digit solution."
+                hidden
+              />
+              <div class="state-panel" id="puzzle-loading">
+                <div class="spinner" aria-hidden="true"></div>
+                <p>Picking a fresh puzzle from the grove…</p>
+              </div>
+              <div class="state-panel" id="puzzle-error" hidden>
+                <div class="error-icon" aria-hidden="true">⚠️</div>
+                <p id="puzzle-error-text">The banana grove is busy. We could not fetch a puzzle.</p>
+                <button type="button" class="btn btn-primary" id="retry-puzzle">Retry Puzzle</button>
+              </div>
+            </div>
+
+            <!-- KEYPAD & FEEDBACK COLUMN -->
+            <div class="pad-column">
+              <!-- INSTANT FEEDBACK NOTIFICATION -->
+              <div class="feedback-card" id="feedback-card">
+                <p class="feedback" id="feedback" aria-live="polite">
+                  One attempt per puzzle. Tap a digit or type on your keyboard.
+                </p>
+                <span id="feedback-points" class="feedback-points" hidden></span>
+              </div>
+
+              <!-- KEYBOARD TIP BANNER -->
+              <div class="key-hint" aria-hidden="true">
+                <small>Keyboard: Press <kbd>0</kbd>–<kbd>9</kbd> · <kbd>Enter</kbd> to advance</small>
+              </div>
+
+              <!-- ON-SCREEN NUMBER PAD (0-9) -->
+              <div class="numpad" id="numpad" role="group" aria-label="Answer number pad (digits 0 through 9)">
+                <button type="button" data-digit="1" aria-label="Answer 1">1</button>
+                <button type="button" data-digit="2" aria-label="Answer 2">2</button>
+                <button type="button" data-digit="3" aria-label="Answer 3">3</button>
+                <button type="button" data-digit="4" aria-label="Answer 4">4</button>
+                <button type="button" data-digit="5" aria-label="Answer 5">5</button>
+                <button type="button" data-digit="6" aria-label="Answer 6">6</button>
+                <button type="button" data-digit="7" aria-label="Answer 7">7</button>
+                <button type="button" data-digit="8" aria-label="Answer 8">8</button>
+                <button type="button" data-digit="9" aria-label="Answer 9">9</button>
+                <button type="button" class="wide" data-digit="0" aria-label="Answer 0">0</button>
+              </div>
+
+              <!-- PLAY ACTION CONTROLS -->
+              <div class="play-actions">
+                <button type="button" class="btn btn-primary" id="next-puzzle" hidden>
+                  Next Puzzle ➔
+                </button>
+                <button type="button" class="btn btn-ghost" id="end-run">
+                  Change Mode
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RUN COMPLETE OVERLAY / MODAL -->
+        <div id="run-over" class="run-over" hidden>
+          <div class="run-over-content">
+            <span class="run-over-badge" aria-hidden="true">🏆</span>
+            <h2>Run Complete!</h2>
+            <p id="run-over-text" class="run-over-text"></p>
+            <div id="run-over-high-alert" class="high-score-alert" hidden>
+              🌟 New Personal Best in this mode!
+            </div>
+            <div class="hero-actions">
+              <button type="button" class="btn btn-primary" id="play-again">Play Again</button>
+              <a class="btn btn-ghost" href="#/board" data-nav>View Leaderboard</a>
+              <button type="button" class="btn btn-ghost" id="run-change-mode">Pick Other Mode</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROFILE VIEW -->
+      <section class="view" id="view-profile" data-view="profile" hidden>
+        <div class="profile-header">
+          <div class="profile-avatar" aria-hidden="true">🍌</div>
+          <div>
+            <h1 id="profile-heading">Player Profile</h1>
+            <p class="lede" id="profile-name">Loading player statistics…</p>
+          </div>
+        </div>
+
+        <h2 class="subhead">Lifetime Summary</h2>
+        <div class="stat-grid" id="profile-summary">
+          <!-- Populated dynamically by app.js -->
+        </div>
+
+        <h2 class="subhead">Mode Breakdown</h2>
+        <div class="table-wrap">
+          <table aria-label="Personal statistics broken down by game mode">
+            <thead>
+              <tr>
+                <th scope="col">Mode</th>
+                <th scope="col">Best Single Run</th>
+                <th scope="col">Best Streak</th>
+                <th scope="col">Puzzles Played</th>
+                <th scope="col">Accuracy</th>
+              </tr>
+            </thead>
+            <tbody id="profile-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- LEADERBOARD VIEW -->
+      <section class="view" id="view-board" data-view="board" hidden>
+        <div class="board-head">
+          <div>
+            <h1>Banana Leaderboard</h1>
+            <p class="muted">Top 10 players ranked by peak single-run score</p>
+          </div>
+
+          <!-- Accessible Mode Filter Tabs -->
+          <div class="board-tabs" role="tablist" aria-label="Filter Leaderboard by Game Mode">
+            <button
+              type="button"
+              class="board-tab-btn active"
+              data-board-mode="classic"
+              role="tab"
+              aria-selected="true"
+            >
+              🍌 Classic
+            </button>
+            <button
+              type="button"
+              class="board-tab-btn"
+              data-board-mode="timed"
+              role="tab"
+              aria-selected="false"
+            >
+              ⏱️ Timed
+            </button>
+            <button
+              type="button"
+              class="board-tab-btn"
+              data-board-mode="survival"
+              role="tab"
+              aria-selected="false"
+            >
+              🛡️ Survival
+            </button>
+          </div>
+
+          <!-- Hidden select for form accessibility fallback -->
+          <label class="filter sr-only" for="board-mode">
+            Mode
+            <select id="board-mode" aria-label="Filter leaderboard by mode">
+              <option value="classic">Classic</option>
+              <option value="timed">Timed</option>
+              <option value="survival">Survival</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table aria-label="Top 10 players leaderboard">
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Player</th>
+                <th scope="col">High Score</th>
+                <th scope="col">Best Streak</th>
+                <th scope="col">Accuracy</th>
+              </tr>
+            </thead>
+            <tbody id="board-rows"></tbody>
+          </table>
+        </div>
+
+        <div class="empty-state" id="board-empty" hidden>
+          <span class="empty-icon" aria-hidden="true">🌴</span>
+          <p>No recorded scores in this mode yet.</p>
+          <p class="muted">Jump in, play a run, and be the first to claim the #1 spot!</p>
+          <a class="btn btn-primary" href="#/play" data-nav>Play This Mode</a>
+        </div>
+      </section>
+    </main>
+
+    <!-- TOAST POPUP NOTIFICATION -->
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <p>
+          <strong>Banana Game</strong> · Developed for <em>CIS046-3 Software For Enterprise</em>
+        </p>
+        <p class="footer-small">
+          Code generated with AI assistance. Features HTTPS REST Interoperability, Event-Driven Architecture,
+          Bcrypt Virtual Identity, and Git Version Control.
+        </p>
+      </div>
+    </footer>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
